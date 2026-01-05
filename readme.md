@@ -219,3 +219,52 @@ python mcp_core.py
 - 初始化 MCP 主控程序；
 - 进入命令行交互模式；
 - 只需输入加班日期，后续流程由程序自动完成。
+
+## 在 IDE 中以 MCP 方式调用（JSON 配置示例）
+
+可以为本工具增加一条自定义配置，方便在 IDE 中直接调用。
+
+
+可以为加班提报 MCP 增加一段类似的配置：
+
+```jsonc
+{
+  "servers": {
+    "Overtime MCP": {
+      "command": "uvx",
+      "args": ["jabanmcp"],
+      "env": {
+        "OVERTIME_API_URL": "https://oa.chinawinddata.com:18380/8089",
+        "OVERTIME_API_TOKEN": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJtYWp1biIsInRlbmFudElkIjoiLTEiLCJleHAiOjE3Njc1OTg5NjcsImlhdCI6MTc2NzU5MTc2N30.X-SLl9uylv2Jrh-o97mUYtvZbo85rYSt1fgGVikZie32AcSwTbM-lTI-ag9Zupii0RCRRwJhnYbBj30tT6dPrw",
+        "MCP_LOG_LEVEL": "INFO"
+      },
+      "type": "stdio"
+    }
+  }
+}
+```
+
+使用说明：
+
+- `command`
+  - 对应已经通过 `pip install .` 或安装 wheel 之后注册的命令行入口 `jabanmcp`。
+  - 如果你没有全局安装命令，也可以改成：
+    - `command`: `"python"`
+    - `args`: `["-m", "mcp_core"]`
+
+- `args`
+  - 留空数组表示不额外传入参数；
+  - 如果改用 `python -m mcp_core` 方式，这里需要填上对应的模块参数。
+
+- `env`
+  - 将原 `.env` 中的关键配置显式写到 IDE 的环境变量中，常见字段包括：
+    - `OVERTIME_API_URL`：加班相关接口的基础地址；
+    - `OVERTIME_API_TOKEN`：访问后端服务所需的鉴权 token；
+    - `DAILY_TEMPLATE_ID`：个人日报模板 ID；
+    - `MCP_LOG_LEVEL`：日志级别（如 `INFO`、`DEBUG`）。
+  - 这样即使不加载 `.env` 文件，只要 IDE 启动该 MCP 进程时带上这些环境变量，工具就可以正常工作。
+
+- `type`
+  - 一般保持为 `stdio`，表示通过标准输入/输出与 IDE 通信。
+
+实际落地时，你只需要在 IDE 对应的 MCP 配置文件里，把上面的片段合并进去，并根据自己的环境替换 env 里的具体值即可。
