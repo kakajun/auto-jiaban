@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jabanmcp"
+version = "0.1.0"
+description = "MCP tool for automatic overtime application based on daily reports"
+readme = "readme.md"
+requires-python = ">=3.10"
+dependencies = ["requests", "python-dotenv"]
+
+[project.scripts]
+jabanmcp = "mcp_core:main"
+
+[tool.setuptools]
+py-modules = ["config", "mcp_core", "overtime_task"]
+

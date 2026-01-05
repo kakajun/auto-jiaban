@@ -95,9 +95,10 @@ class OvertimeMCP:
             self.dispatch_overtime_task(overtime_date, None)
             self.logger.info("本次任务调度完成，可查看日志文件获取详细结果")
 
-if __name__ == "__main__":
-    # 启动 MCP 主控程序
+def main():
     overtime_mcp = OvertimeMCP()
-
-    # 进入交互模式（用户手动触发任务，也可添加定时调度方法）
     overtime_mcp.interactive_mode()
+
+
+if __name__ == "__main__":
+    main()
