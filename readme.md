@@ -235,10 +235,9 @@ python mcp_core.py
       "args": ["jabanmcp"],
       "env": {
         "OVERTIME_API_URL": "https://oa.chinawinddata.com:18380/8089",
-        "OVERTIME_API_TOKEN": "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJtYWp1biIsInRlbmFudElkIjoiLTEiLCJleHAiOjE3Njc1OTg5NjcsImlhdCI6MTc2NzU5MTc2N30.X-SLl9uylv2Jrh-o97mUYtvZbo85rYSt1fgGVikZie32AcSwTbM-lTI-ag9Zupii0RCRRwJhnYbBj30tT6dPrw",
+        "OVERTIME_API_TOKEN": "XXX",
         "MCP_LOG_LEVEL": "INFO"
-      },
-      "type": "stdio"
+      }
     }
   }
 }
