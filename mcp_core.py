@@ -91,92 +91,94 @@ class OvertimeMCP:
             self.logger.info("本次任务调度完成，可查看日志文件获取详细结果")
 
 def main():
-    if sys.stdin.isatty():
-        overtime_mcp = OvertimeMCP(enable_console_log=True)
-        overtime_mcp.interactive_mode()
-        return
+    mode = os.getenv("JABANMCP_MODE")
+    if mode == "mcp":
+        overtime_mcp = OvertimeMCP(enable_console_log=False)
 
-    overtime_mcp = OvertimeMCP(enable_console_log=False)
+        for line in sys.stdin:
+            text = line.strip()
+            if not text:
+                continue
+            try:
+                message = json.loads(text)
+            except json.JSONDecodeError:
+                continue
 
-    for line in sys.stdin:
-        text = line.strip()
-        if not text:
-            continue
-        try:
-            message = json.loads(text)
-        except json.JSONDecodeError:
-            continue
+            message_id = message.get("id")
+            method = message.get("method")
+            params = message.get("params") or {}
 
-        message_id = message.get("id")
-        method = message.get("method")
-        params = message.get("params") or {}
-
-        try:
-            if method == "initialize":
-                protocol_version = params.get("protocolVersion", "2025-06-18")
-                result = {
-                    "protocolVersion": protocol_version,
-                    "serverInfo": {"name": "jabanmcp", "version": "0.1.0"},
-                    "capabilities": {"tools": {}},
-                }
-                response = {"jsonrpc": "2.0", "id": message_id, "result": result}
-            elif method == "tools/list":
-                tools = [
-                    {
-                        "name": "overtime.submit",
-                        "description": (
-                            "根据指定日期提交加班申请。"
-                            "当用户在对话中说出类似“帮我写个2025-12-25的加班单”“为2025-12-25提个加班申请”时，"
-                            "应调用此工具：从用户话语中提取日期作为 date 参数；"
-                            "如果未提供 content，则自动从该日期的日报中补全加班内容和项目信息。"
-                        ),
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "date": {
-                                    "type": "string",
-                                    "description": "加班日期，格式为 YYYY-MM-DD，例如 2025-12-25",
-                                },
-                                "content": {
-                                    "type": "string",
-                                    "description": "可选，加班内容，通常省略以便自动从日报读取",
-                                },
-                            },
-                            "required": ["date"],
-                        },
-                    }
-                ]
-                response = {
-                    "jsonrpc": "2.0",
-                    "id": message_id,
-                    "result": {"tools": tools},
-                }
-            elif method == "tools/call":
-                name = params.get("name")
-                arguments = params.get("arguments") or {}
-                if name != "overtime.submit":
-                    error = {"code": -32601, "message": "Unknown tool name"}
-                    response = {"jsonrpc": "2.0", "id": message_id, "error": error}
-                else:
-                    date = arguments.get("date")
-                    content = arguments.get("content")
-                    task_result = overtime_mcp.dispatch_overtime_task(date, content)
-                    text_content = json.dumps(task_result, ensure_ascii=False)
+            try:
+                if method == "initialize":
+                    protocol_version = params.get("protocolVersion", "2025-06-18")
                     result = {
-                        "content": [
-                            {"type": "text", "text": text_content},
-                        ]
+                        "protocolVersion": protocol_version,
+                        "serverInfo": {"name": "jabanmcp", "version": "0.1.1"},
+                        "capabilities": {"tools": {}},
                     }
                     response = {"jsonrpc": "2.0", "id": message_id, "result": result}
-            else:
-                error = {"code": -32601, "message": "Unknown method"}
+                elif method == "tools/list":
+                    tools = [
+                        {
+                            "name": "overtime.submit",
+                            "description": (
+                                "根据指定日期提交加班申请。"
+                                "当用户在对话中说出类似“帮我写个2025-12-25的加班单”“为2025-12-25提个加班申请”时，"
+                                "应调用此工具：从用户话语中提取日期作为 date 参数；"
+                                "如果未提供 content，则自动从该日期的日报中补全加班内容和项目信息。"
+                            ),
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "date": {
+                                        "type": "string",
+                                        "description": "加班日期，格式为 YYYY-MM-DD，例如 2025-12-25",
+                                    },
+                                    "content": {
+                                        "type": "string",
+                                        "description": "可选，加班内容，通常省略以便自动从日报读取",
+                                    },
+                                },
+                                "required": ["date"],
+                            },
+                        }
+                    ]
+                    response = {
+                        "jsonrpc": "2.0",
+                        "id": message_id,
+                        "result": {"tools": tools},
+                    }
+                elif method == "tools/call":
+                    name = params.get("name")
+                    arguments = params.get("arguments") or {}
+                    if name != "overtime.submit":
+                        error = {"code": -32601, "message": "Unknown tool name"}
+                        response = {"jsonrpc": "2.0", "id": message_id, "error": error}
+                    else:
+                        date = arguments.get("date")
+                        content = arguments.get("content")
+                        task_result = overtime_mcp.dispatch_overtime_task(date, content)
+                        text_content = json.dumps(task_result, ensure_ascii=False)
+                        result = {
+                            "content": [
+                                {"type": "text", "text": text_content},
+                            ]
+                        }
+                        response = {"jsonrpc": "2.0", "id": message_id, "result": result}
+                else:
+                    error = {"code": -32601, "message": "Unknown method"}
+                    response = {"jsonrpc": "2.0", "id": message_id, "error": error}
+            except Exception as e:
+                error = {"code": -32000, "message": str(e)}
                 response = {"jsonrpc": "2.0", "id": message_id, "error": error}
-        except Exception as e:
-            error = {"code": -32000, "message": str(e)}
-            response = {"jsonrpc": "2.0", "id": message_id, "error": error}
 
-        sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
-        sys.stdout.flush()
+            if message_id is not None:
+                sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+                sys.stdout.flush()
+        return
+
+    overtime_mcp = OvertimeMCP(enable_console_log=True)
+    overtime_mcp.interactive_mode()
 
 
 if __name__ == "__main__":

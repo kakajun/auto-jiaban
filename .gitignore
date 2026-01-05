@@ -1,3 +1,5 @@
 .venv
 dist
+logs
 jabanmcp.egg-info
+__pycache__

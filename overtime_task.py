@@ -10,10 +10,13 @@ class OvertimeSubmitTask:
     def __init__(self):
         self.config = MCPGlobalConfig()
         self.headers = self._build_request_headers()
-        base_url = self.config.API_URL.rstrip("/") if self.config.API_URL else ""
-        self.valid_exist_url = f"{base_url}/mis/hf/common/v1/validExist"
-        self.start_flow_url = f"{base_url}/runtime/instance/v1/start"
-        self.daily_list_url = f"{base_url}/form/dataTemplate/v1/listJson"
+        raw_base_url = (self.config.API_URL or "").strip().rstrip("/")
+        if raw_base_url and not raw_base_url.startswith(("http://", "https://")):
+            raw_base_url = "https://" + raw_base_url.lstrip("/")
+        self.base_url = raw_base_url
+        self.valid_exist_url = f"{self.base_url}/mis/hf/common/v1/validExist"
+        self.start_flow_url = f"{self.base_url}/runtime/instance/v1/start"
+        self.daily_list_url = f"{self.base_url}/form/dataTemplate/v1/listJson"
 
     def _build_request_headers(self):
         """构建请求头（子任务内部辅助方法，被 MCP 调度时自动调用）"""
@@ -166,6 +169,14 @@ class OvertimeSubmitTask:
         :param overtime_content: 加班内容，不传则使用默认值
         :return: 任务执行结果（供 MCP 记录日志）
         """
+        if not self.base_url or not self.base_url.startswith(("http://", "https://")):
+            return {
+                "task_status": "failed",
+                "task_type": "overtime_submit",
+                "message": "接口基础地址配置错误，请检查环境变量 OVERTIME_API_URL",
+                "data": None,
+                "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
         if not self._validate_overtime_date(overtime_date):
             return {
                 "task_status": "failed",
