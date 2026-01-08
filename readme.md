@@ -128,7 +128,7 @@
    在虚拟环境中执行：
 
    ```bash
-      .\.venv\Scripts\Activate.ps1
+.venv\Scripts\activate
    python mcp_core.py
    ```
 

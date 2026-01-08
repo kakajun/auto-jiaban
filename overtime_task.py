@@ -88,14 +88,15 @@ class OvertimeSubmitTask:
         self._handle_response(response)
         return response.json()
 
-    def _build_auto_overtime_from_daily(self, overtime_date: str):
+    def get_daily_report(self, overtime_date: str) -> dict:
+        """获取指定日期的日报内容（供 MCP 工具 daily.get 使用）"""
+        if not self._validate_overtime_date(overtime_date):
+            return {"error": "Invalid date format"}
+
         body = {
             "templateId": self.config.DAILY_TEMPLATE_ID,
             "queryFilter": {
-                "pageBean": {
-                    "page": 1,
-                    "pageSize": 80,
-                },
+                "pageBean": {"page": 1, "pageSize": 80},
                 "querys": [],
                 "sorter": [],
             },
@@ -111,31 +112,34 @@ class OvertimeSubmitTask:
             data = response.json()
         except TokenExpiredError:
             raise
-        except requests.exceptions.RequestException:
-            return None
+        except requests.exceptions.RequestException as e:
+            return {"error": str(e)}
+
         rows = data.get("rows") or []
-        base_content = None
-        project_name = None
-        project_id = None
         for row in rows:
             if row.get("DATE_") == overtime_date:
-                text = row.get("content") or row.get("CONTENT_")
-                if text:
-                    base_content = text
-                pn = row.get("PROJECT_NAME") or row.get("PROJECT_NAME_")
-                if pn:
-                    project_name = pn
-                pid = row.get("PROJECT_ID") or row.get("PROJECT_ID_")
-                if pid:
-                    project_id = pid
-                break
+                content = row.get("content") or row.get("CONTENT_")
+                project_name = self.config.PROJECT_NAME
+                project_id = self.config.PROJECT_ID
+                return {
+                    "content": content,
+                    "project_name": project_name,
+                    "project_id": project_id,
+                }
+        return {"content": None, "message": "No daily report found for this date"}
+
+    def _build_auto_overtime_from_daily(self, overtime_date: str):
+        # 复用 get_daily_report 逻辑，保持原有行为
+        info = self.get_daily_report(overtime_date)
+        base_content = info.get("content")
         if not base_content:
             return None
+
         overtime_content = f"{base_content}, 修改其bug"
         return {
             "content": overtime_content,
-            "project_name": project_name,
-            "project_id": project_id,
+            "project_name": info.get("project_name"),
+            "project_id": info.get("project_id"),
         }
 
     def _build_start_process_data(self, overtime_date: str, start_time: str, end_time: str, overtime_content: str, project_name: str = None, project_id: str = None) -> str:
@@ -145,8 +149,8 @@ class OvertimeSubmitTask:
         start_dt = datetime.strptime(start_time, "%Y-%m-%d %H:%M:%S")
         end_dt = datetime.strptime(end_time, "%Y-%m-%d %H:%M:%S")
         overtime_duration = int((end_dt - start_dt).total_seconds() // 3600)
-        project_name_value = project_name or "中合茂力新能源电站智能监控管理平台---（河北张家口生产管理系统）"
-        project_id_value = project_id or "XM-XS-20230803"
+        project_name_value = project_name or self.config.PROJECT_NAME
+        project_id_value = project_id or self.config.PROJECT_ID
         payload = {
             "jbsqb": {
                 "UPDATE_BY_ID_": "1044",
@@ -176,7 +180,8 @@ class OvertimeSubmitTask:
                 "initData": {},
             }
         }
-        json_str = json.dumps(payload, ensure_ascii=False)
+        # 使用 ensure_ascii=True 将中文和特殊字符转义为 \uXXXX，避免 encode('utf-8') 时因代理对报错，同时兼容后端解析
+        json_str = json.dumps(payload, ensure_ascii=True)
         return base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
 
     def _start_overtime_process(self, data_base64: str):

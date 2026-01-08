@@ -122,12 +122,25 @@ def main():
                 elif method == "tools/list":
                     tools = [
                         {
+                            "name": "daily.get",
+                            "description": "获取指定日期的日报内容。建议在调用 overtime.submit 之前先调用此工具获取日报，利用模型能力将日报内容润色为正式的加班申请理由。",
+                            "inputSchema": {
+                                "type": "object",
+                                "properties": {
+                                    "date": {
+                                        "type": "string",
+                                        "description": "日期，格式为 YYYY-MM-DD",
+                                    }
+                                },
+                                "required": ["date"],
+                            },
+                        },
+                        {
                             "name": "overtime.submit",
                             "description": (
                                 "根据指定日期提交加班申请。"
-                                "当用户在对话中说出类似“帮我写个2025-12-25的加班单”“为2025-12-25提个加班申请”时，"
-                                "应调用此工具：从用户话语中提取日期作为 date 参数；"
-                                "如果未提供 content，则自动从该日期的日报中补全加班内容和项目信息。"
+                                "如果用户提供了content参数，请先用模型能力对其进行润色，然后将润色后的内容作为content参数传入。"
+                                "如果用户未提供content参数，建议先调用 daily.get 获取日报内容，经模型润色后，将润色好的内容作为 content 参数传入。"
                             ),
                             "inputSchema": {
                                 "type": "object",
@@ -138,7 +151,7 @@ def main():
                                     },
                                     "content": {
                                         "type": "string",
-                                        "description": "可选，加班内容，通常省略以便自动从日报读取",
+                                        "description": "可选，经过模型润色后的加班内容。建议提供此参数以获得更好的提报质量。",
                                     },
                                 },
                                 "required": ["date"],
@@ -153,10 +166,16 @@ def main():
                 elif method == "tools/call":
                     name = params.get("name")
                     arguments = params.get("arguments") or {}
-                    if name != "overtime.submit":
-                        error = {"code": -32601, "message": "Unknown tool name"}
-                        response = {"jsonrpc": "2.0", "id": message_id, "error": error}
-                    else:
+
+                    if name == "daily.get":
+                        date = arguments.get("date")
+                        daily_info = overtime_mcp.overtime_task.get_daily_report(date)
+                        text_content = json.dumps(daily_info, ensure_ascii=False)
+                        result = {
+                            "content": [{"type": "text", "text": text_content}]
+                        }
+                        response = {"jsonrpc": "2.0", "id": message_id, "result": result}
+                    elif name == "overtime.submit":
                         date = arguments.get("date")
                         content = arguments.get("content")
                         task_result = overtime_mcp.dispatch_overtime_task(date, content)
@@ -167,6 +186,9 @@ def main():
                             ]
                         }
                         response = {"jsonrpc": "2.0", "id": message_id, "result": result}
+                    else:
+                        error = {"code": -32601, "message": "Unknown tool name"}
+                        response = {"jsonrpc": "2.0", "id": message_id, "error": error}
                 else:
                     error = {"code": -32601, "message": "Unknown method"}
                     response = {"jsonrpc": "2.0", "id": message_id, "error": error}
