@@ -14,6 +14,7 @@ class MCPGlobalConfig:
     PROJECT_NAME = os.getenv("PROJECT_NAME", "中合茂力新能源电站智能监控管理平台---（河北张家口生产管理系统）")
     PROJECT_ID = os.getenv("PROJECT_ID", "XM-XS-20230803")
     REQUEST_TIMEOUT = int(os.getenv("MCP_TIMEOUT", 30))
+    SIMULATE = os.getenv("MCP_SIMULATE", "0")
 
     # 加班固定参数（MCP 统一维护，可直接在这修改，无需动任务代码）
     FIXED_OVERTIME_START = "18:30:00"

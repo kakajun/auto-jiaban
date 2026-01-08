@@ -14,6 +14,22 @@ class OvertimeMCP:
         self.config = MCPGlobalConfig()
         self.overtime_task = OvertimeSubmitTask()
         self._init_mcp_logger(enable_console_log)
+        try:
+            if sys.version_info >= (3, 11):
+                from importlib.metadata import version
+                self.package_version = version("jabanmcp")
+            else:
+                try:
+                    import tomllib
+                    with open("pyproject.toml", "rb") as f:
+                        data = tomllib.load(f)
+                        self.package_version = data["project"]["version"]
+                except ImportError:
+                    self.package_version = "Unknown (Dev)"
+                except FileNotFoundError:
+                    self.package_version = "Unknown (Installed)"
+        except Exception:
+            self.package_version = "Unknown"
         self._print_mcp_start_info()
 
     def _init_mcp_logger(self, enable_console_log: bool):
@@ -34,7 +50,7 @@ class OvertimeMCP:
         logger.addHandler(file_handler)
 
         if enable_console_log:
-            console_handler = logging.StreamHandler()
+            console_handler = logging.StreamHandler(stream=sys.stderr)
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
 
@@ -44,7 +60,8 @@ class OvertimeMCP:
         """MCP 启动时打印欢迎信息和配置概要"""
         self.logger.info("=" * 50)
         self.logger.info("加班提报 MCP 主控程序启动成功")
-        self.logger.info(f"MCP 版本：1.0.0")
+
+        self.logger.info(f"MCP 版本：{self.package_version}")
         self.logger.info(f"接口地址：{self.config.API_URL}")
         self.logger.info(f"固定加班时间：{self.config.FIXED_OVERTIME_START} - {self.config.FIXED_OVERTIME_END}")
         self.logger.info(f"日志文件路径：{self.config.LOG_FILE}")
@@ -93,8 +110,9 @@ class OvertimeMCP:
 
 def main():
     mode = os.getenv("JABANMCP_MODE")
-    if mode == "mcp":
-        overtime_mcp = OvertimeMCP(enable_console_log=False)
+    mcp_mode = (mode == "mcp") or (not sys.stdin.isatty())
+    if mcp_mode:
+        overtime_mcp = OvertimeMCP(enable_console_log=True)
 
         for line in sys.stdin:
             text = line.strip()
@@ -111,11 +129,13 @@ def main():
 
             try:
                 if method == "initialize":
-                    overtime_mcp.overtime_task.health_check_token()
+                    ok = overtime_mcp.overtime_task.health_check_token()
+                    if not ok:
+                        overtime_mcp.logger.warning("初始化阶段令牌健康检查失败（网络异常或非401），继续启动 MCP")
                     protocol_version = params.get("protocolVersion", "2025-06-18")
                     result = {
                         "protocolVersion": protocol_version,
-                        "serverInfo": {"name": "jabanmcp", "version": "0.1.1"},
+                        "serverInfo": {"name": "jabanmcp", "version": overtime_mcp.package_version},
                         "capabilities": {"tools": {}},
                     }
                     response = {"jsonrpc": "2.0", "id": message_id, "result": result}
@@ -203,13 +223,11 @@ def main():
                 response = {"jsonrpc": "2.0", "id": message_id, "error": error}
 
             if message_id is not None:
-                # 使用 ensure_ascii=True 确保输出纯 ASCII 字符，避免 stdout 编码错误
                 sys.stdout.write(json.dumps(response, ensure_ascii=True) + "\n")
                 sys.stdout.flush()
-        return
-
-    overtime_mcp = OvertimeMCP(enable_console_log=True)
-    overtime_mcp.interactive_mode()
+    else:
+        om = OvertimeMCP(enable_console_log=True)
+        om.interactive_mode()
 
 
 if __name__ == "__main__":

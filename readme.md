@@ -128,7 +128,7 @@
    在虚拟环境中执行：
 
    ```bash
-.venv\Scripts\activate
+    .venv\Scripts\activate
    python mcp_core.py
    ```
 
@@ -183,7 +183,13 @@
 
    构建完成后，会在 `dist/` 目录下生成安装包文件（包括 `.whl` 和源代码压缩包）。
 
-3. 安装构建好的包：
+3. 发布到 PyPI
+
+   ```bash
+   python -m twine upload dist/*
+   ```
+
+4. 安装构建好的包：
 
    ```bash
    pip install dist/jabanmcp-0.1.0-py3-none-any.whl
@@ -201,7 +207,32 @@
    uv pip install .
    ```
 
-### 安装后的使用方式
+## 仿真模式（避免真实提报）
+
+- 为了在本地或联调环境中安全测试流程而不触发真实提报，提供仿真模式：
+  - 通过环境变量启用：`MCP_SIMULATE=1`
+  $env:MCP_SIMULATE="1"
+  - 仿真模式行为：
+    - `initialize` 阶段：令牌健康检查直接视为通过；
+    - `daily.get`：正常读取日报接口（如需完全离线可自定义返回）；
+    - `overtime.submit`：不调用真实「流程启动」接口，返回一条模拟成功响应（示例 `instId=SIM-<timestamp>`）。
+  - 关闭仿真模式：`MCP_SIMULATE=0` 或不设置该变量。
+  $env:MCP_SIMULATE="0"
+
+### 本地测试脚本
+
+- 项目内置一个简单的 JSON-RPC 测试脚本，用于与 MCP 交互：
+  - 脚本位置：[test_mcp_client.py](file:///e:/py/jabanmcp/test_mcp_client.py)
+  - 执行：
+    ```bash
+    python test_mcp_client.py
+    ```
+  - 该脚本会：
+    - 启动 MCP 的 stdio 模式；
+    - 发送 `initialize`、`tools/list`；
+    - 在仿真模式下发送 `tools/call(overtime.submit)` 并打印模拟返回结果。
+
+## 安装后的使用方式
 
 安装成功后，系统中会注册一个命令行入口：
 
@@ -237,7 +268,9 @@ python mcp_core.py
       "env": {
         "OVERTIME_API_URL": "https://oa.chinawinddata.com:18380/8089",
         "OVERTIME_API_TOKEN": "XXX",
-        "MCP_LOG_LEVEL": "INFO"
+        "MCP_LOG_LEVEL": "INFO",
+        "PROJECT_NAME": "XXXXXX",
+        "PROJECT_ID": "XM-XS-XXXXX"
       }
     }
   }

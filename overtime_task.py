@@ -21,11 +21,15 @@ class OvertimeSubmitTask:
         self.start_flow_url = f"{self.base_url}/runtime/instance/v1/start"
         self.daily_list_url = f"{self.base_url}/form/dataTemplate/v1/listJson"
 
+    def _is_simulate(self) -> bool:
+        v = getattr(self.config, "SIMULATE", "0")
+        return str(v).lower() in ("1", "true", "yes")
+
     def _build_request_headers(self):
         """构建请求头（子任务内部辅助方法，被 MCP 调度时自动调用）"""
         return {
             "Authorization": f"Bearer {self.config.API_TOKEN}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/json; charset=utf-8",
             "User-Agent": "OvertimeMCP/1.0.0"
         }
 
@@ -48,6 +52,8 @@ class OvertimeSubmitTask:
         response.raise_for_status()
 
     def health_check_token(self) -> bool:
+        if self._is_simulate():
+            return True
         body = {
             "templateId": self.config.DAILY_TEMPLATE_ID,
             "queryFilter": {
@@ -71,6 +77,8 @@ class OvertimeSubmitTask:
             return False
 
     def _request_valid_exist(self, start_time: str, end_time: str):
+        if self._is_simulate():
+            return {"state": False, "value": None}
         request_data = {
             "businessKey": "jbsqb",
             "id": None,
@@ -180,11 +188,17 @@ class OvertimeSubmitTask:
                 "initData": {},
             }
         }
-        # 使用 ensure_ascii=True 将中文和特殊字符转义为 \uXXXX，避免 encode('utf-8') 时因代理对报错，同时兼容后端解析
-        json_str = json.dumps(payload, ensure_ascii=True)
+        json_str = json.dumps(payload, ensure_ascii=False)
         return base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
 
     def _start_overtime_process(self, data_base64: str):
+        if self._is_simulate():
+            class Resp:
+                def __init__(self):
+                    self.status_code = 200
+                def json(self):
+                    return {"state": True, "message": "流程启动成功(仿真)", "instId": f"SIM-{int(datetime.now().timestamp())}"}
+            return Resp()
         request_data = {
             "defId": "1882365832407658496",
             "data": data_base64,
@@ -235,6 +249,26 @@ class OvertimeSubmitTask:
                 project_id = auto_data.get("project_id")
             else:
                 overtime_content = self.config.OVERTIME_CONTENT_DEFAULT
+
+        if self._is_simulate():
+            data_base64 = self._build_start_process_data(
+                overtime_date, start_time, end_time, overtime_content, project_name, project_id
+            )
+            inst_id = f"SIM-{int(datetime.now().timestamp())}"
+            return {
+                "task_status": "success",
+                "task_type": "overtime_submit",
+                "message": "仿真模式：加班流程启动模拟成功",
+                "data": {
+                    "state": True,
+                    "message": "流程启动成功(仿真)",
+                    "instId": inst_id,
+                    "inst": {"id": inst_id, "subject": f"仿真加班-{overtime_date}"},
+                    "data_base64": data_base64,
+                },
+                "status_code": 200,
+                "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
 
         try:
             valid_exist_result = self._request_valid_exist(start_time, end_time)
