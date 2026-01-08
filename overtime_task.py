@@ -1,5 +1,8 @@
 # overtime_task.py - 加班提报子任务，MCP 不直接处理接口，只调度该任务
-import requests
+try:
+    import requests as _requests
+except Exception:
+    _requests = None
 import json
 import base64
 from datetime import datetime
@@ -54,6 +57,8 @@ class OvertimeSubmitTask:
     def health_check_token(self) -> bool:
         if self._is_simulate():
             return True
+        if _requests is None:
+            return False
         body = {
             "templateId": self.config.DAILY_TEMPLATE_ID,
             "queryFilter": {
@@ -63,7 +68,7 @@ class OvertimeSubmitTask:
             },
         }
         try:
-            response = requests.post(
+            response = _requests.post(
                 url=self.daily_list_url,
                 json=body,
                 headers=self.headers,
@@ -73,12 +78,14 @@ class OvertimeSubmitTask:
             return True
         except TokenExpiredError:
             raise
-        except requests.exceptions.RequestException:
+        except Exception:
             return False
 
     def _request_valid_exist(self, start_time: str, end_time: str):
         if self._is_simulate():
             return {"state": False, "value": None}
+        if _requests is None:
+            raise RuntimeError("requests 未安装")
         request_data = {
             "businessKey": "jbsqb",
             "id": None,
@@ -87,7 +94,7 @@ class OvertimeSubmitTask:
             "endTime": end_time,
             "userId": "1044",
         }
-        response = requests.post(
+        response = _requests.post(
             url=self.valid_exist_url,
             json=request_data,
             headers=self.headers,
@@ -100,6 +107,14 @@ class OvertimeSubmitTask:
         """获取指定日期的日报内容（供 MCP 工具 daily.get 使用）"""
         if not self._validate_overtime_date(overtime_date):
             return {"error": "Invalid date format"}
+        if self._is_simulate():
+            return {
+                "content": f"{overtime_date} 仿真日报内容，修改其bug",
+                "project_name": self.config.PROJECT_NAME,
+                "project_id": self.config.PROJECT_ID,
+            }
+        if _requests is None and not self._is_simulate():
+            return {"error": "requests 未安装"}
 
         body = {
             "templateId": self.config.DAILY_TEMPLATE_ID,
@@ -110,7 +125,7 @@ class OvertimeSubmitTask:
             },
         }
         try:
-            response = requests.post(
+            response = _requests.post(
                 url=self.daily_list_url,
                 json=body,
                 headers=self.headers,
@@ -120,7 +135,7 @@ class OvertimeSubmitTask:
             data = response.json()
         except TokenExpiredError:
             raise
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             return {"error": str(e)}
 
         rows = data.get("rows") or []
@@ -199,13 +214,15 @@ class OvertimeSubmitTask:
                 def json(self):
                     return {"state": True, "message": "流程启动成功(仿真)", "instId": f"SIM-{int(datetime.now().timestamp())}"}
             return Resp()
+        if _requests is None:
+            raise RuntimeError("requests 未安装")
         request_data = {
             "defId": "1882365832407658496",
             "data": data_base64,
             "formType": "inner",
             "supportMobile": 0,
         }
-        response = requests.post(
+        response = _requests.post(
             url=self.start_flow_url,
             json=request_data,
             headers=self.headers,
@@ -299,7 +316,7 @@ class OvertimeSubmitTask:
                 "status_code": response.status_code,
                 "datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
-        except requests.exceptions.RequestException as e:
+        except Exception as e:
             return {
                 "task_status": "failed",
                 "task_type": "overtime_submit",
