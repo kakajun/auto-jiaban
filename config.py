@@ -1,6 +1,10 @@
 # config.py - MCP 全局配置类，统一维护所有参数，便于扩展
 import os
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:
+    def load_dotenv(*args, **kwargs):
+        return None
 
 # 加载.env配置，MCP 启动时先加载全局配置
 load_dotenv()

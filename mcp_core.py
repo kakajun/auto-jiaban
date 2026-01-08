@@ -91,6 +91,21 @@ class OvertimeMCP:
         return task_result
 def main():
     overtime_mcp = OvertimeMCP(enable_console_log=True)
+    args = sys.argv[1:]
+    if args:
+        date = args[0]
+        content = " ".join(args[1:]) if len(args) > 1 else None
+        result = overtime_mcp.dispatch_overtime_task(date, content)
+        sys.stdout.write(json.dumps(result, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        return
+    oneshot_date = os.getenv("MCP_ONESHOT_DATE")
+    if oneshot_date:
+        oneshot_content = os.getenv("MCP_ONESHOT_CONTENT")
+        result = overtime_mcp.dispatch_overtime_task(oneshot_date, oneshot_content)
+        sys.stdout.write(json.dumps(result, ensure_ascii=False) + "\n")
+        sys.stdout.flush()
+        return
 
     for line in sys.stdin:
         text = line.strip()
@@ -137,8 +152,7 @@ def main():
                         "name": "overtime.submit",
                         "description": (
                             "根据指定日期提交加班申请。"
-                            "如果用户提供了content参数，请先用模型能力对其进行润色，然后将润色后的内容作为content参数传入。"
-                            "如果用户未提供content参数，建议先调用 daily.get 获取日报内容，经模型润色后，将润色好的内容作为 content 参数传入。"
+                            "支持单次调用：未提供content时将自动从日报获取并润色后提交。"
                         ),
                         "inputSchema": {
                             "type": "object",
@@ -150,6 +164,27 @@ def main():
                                 "content": {
                                     "type": "string",
                                     "description": "可选，经过模型润色后的加班内容。建议提供此参数以获得更好的提报质量。不要出现'工作内容润色：依据','加班时间','提报目的','根据','日报','项目编号'等字眼。这就是个简短加班内容, 主要为了修改bug才加班",
+                                },
+                            },
+                            "required": ["date"],
+                        },
+                    },
+                    {
+                        "name": "overtime.auto",
+                        "description": (
+                            "一次调用完成加班申请：只传日期即可。"
+                            "如未传 content，将自动读取当日日报并润色后提交。"
+                        ),
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string",
+                                    "description": "加班日期，格式为 YYYY-MM-DD",
+                                },
+                                "content": {
+                                    "type": "string",
+                                    "description": "可选，自定义加班内容；不传则自动读取日报并润色",
                                 },
                             },
                             "required": ["date"],
@@ -174,6 +209,17 @@ def main():
                     }
                     response = {"jsonrpc": "2.0", "id": message_id, "result": result}
                 elif name == "overtime.submit":
+                    date = arguments.get("date")
+                    content = arguments.get("content")
+                    task_result = overtime_mcp.dispatch_overtime_task(date, content)
+                    text_content = json.dumps(task_result, ensure_ascii=False)
+                    result = {
+                        "content": [
+                            {"type": "text", "text": text_content},
+                        ]
+                    }
+                    response = {"jsonrpc": "2.0", "id": message_id, "result": result}
+                elif name == "overtime.auto":
                     date = arguments.get("date")
                     content = arguments.get("content")
                     task_result = overtime_mcp.dispatch_overtime_task(date, content)

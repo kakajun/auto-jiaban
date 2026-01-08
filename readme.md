@@ -123,7 +123,32 @@
    - 日报模板 ID；
    - 日志级别等。
 
-3. **运行 MCP 交互模式**
+3. **一次运行（推荐）**
+
+   无需分步确认，直接通过命令行传参或环境变量单次触发：
+
+   - 命令行参数
+
+     ```bash
+     python mcp_core.py 2026-01-07
+     # 自定义加班内容
+     python mcp_core.py 2026-01-07 修复接口超时与预警图形
+     ```
+
+   - 环境变量
+
+     ```bash
+     $env:MCP_ONESHOT_DATE="2026-01-07"
+     $env:MCP_ONESHOT_CONTENT="修复接口超时与预警图形"
+     python mcp_core.py
+     ```
+
+   一次运行会自动：
+   - 校验日期与重复记录；
+   - 自动读取日报并润色（若未传 content）；
+   - 发起加班流程并输出结果。
+
+4. **运行 MCP 交互模式**
 
    在虚拟环境中执行：
 
@@ -215,7 +240,7 @@
   - 仿真模式行为：
     - `initialize` 阶段：令牌健康检查直接视为通过；
     - `daily.get`：正常读取日报接口（如需完全离线可自定义返回）；
-    - `overtime.submit`：不调用真实「流程启动」接口，返回一条模拟成功响应（示例 `instId=SIM-<timestamp>`）。
+    - `overtime.submit` / `overtime.auto`：不调用真实「流程启动」接口，返回一条模拟成功响应（示例 `instId=SIM-<timestamp>`）。
   - 关闭仿真模式：`MCP_SIMULATE=0` 或不设置该变量。
   $env:MCP_SIMULATE="0"
 
@@ -230,7 +255,7 @@
   - 该脚本会：
     - 启动 MCP 的 stdio 模式；
     - 发送 `initialize`、`tools/list`；
-    - 在仿真模式下发送 `tools/call(overtime.submit)` 并打印模拟返回结果。
+    - 在仿真模式下发送 `tools/call(overtime.submit)` 或 `tools/call(overtime.auto)` 并打印模拟返回结果。
 
 ## 安装后的使用方式
 
@@ -301,3 +326,14 @@ python mcp_core.py
   - 一般保持为 `stdio`，表示通过标准输入/输出与 IDE 通信。
 
 实际落地时，你只需要在 IDE 对应的 MCP 配置文件里，把上面的片段合并进去，并根据自己的环境替换 env 里的具体值即可。
+
+## MCP 工具清单与单次调用
+
+- 工具列表
+  - `daily.get`：获取指定日期的日报内容（内部用于补全内容）
+  - `overtime.submit`：提交加班申请；未传 `content` 时会自动读取日报并润色后提交
+  - `overtime.auto`：一次调用完成加班申请；只传 `date` 即可，`content` 可选
+
+- 代码参考
+  - 一次性运行入口与环境变量支持：[mcp_core.py](file:///e:/py/jabanmcp/mcp_core.py#L92-L110)
+  - 工具定义与单次调用新增项：[mcp_core.py](file:///e:/py/jabanmcp/mcp_core.py#L120-L190)
