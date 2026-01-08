@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime
 from config import MCPGlobalConfig
-from overtime_task import OvertimeSubmitTask
+from overtime_task import OvertimeSubmitTask, TokenExpiredError
 
 class OvertimeMCP:
     """加班提报 MCP 主控程序：统一管理加班提报任务、配置、日志、执行调度"""
@@ -28,7 +28,7 @@ class OvertimeMCP:
             datefmt="%Y-%m-%d %H:%M:%S"
         )
 
-        file_handler = logging.FileHandler(self.config.LOG_FILE, encoding="utf-8")
+        file_handler = logging.FileHandler(self.config.LOG_FILE, encoding="utf-8", errors="replace")
         file_handler.setFormatter(formatter)
 
         logger.addHandler(file_handler)
@@ -65,7 +65,8 @@ class OvertimeMCP:
         # 记录任务执行结果（MCP 核心：留存执行痕迹）
         if task_result["task_status"] == "success":
             self.logger.info(f"加班提报任务执行成功 - 响应码：{task_result.get('status_code')}")
-            self.logger.debug(f"任务详细响应：{task_result['data']}")
+            # 使用 repr 避免非法字符导致日志写入失败
+            self.logger.debug(f"任务详细响应：{repr(task_result['data'])}")
         else:
             self.logger.error(f"加班提报任务执行失败 - 原因：{task_result['message']}")
 
@@ -110,6 +111,7 @@ def main():
 
             try:
                 if method == "initialize":
+                    overtime_mcp.overtime_task.health_check_token()
                     protocol_version = params.get("protocolVersion", "2025-06-18")
                     result = {
                         "protocolVersion": protocol_version,
@@ -168,12 +170,19 @@ def main():
                 else:
                     error = {"code": -32601, "message": "Unknown method"}
                     response = {"jsonrpc": "2.0", "id": message_id, "error": error}
+            except TokenExpiredError:
+                error = {"code": -40100, "message": "Token过期，请重新登录或更新 OVERTIME_API_TOKEN"}
+                response = {"jsonrpc": "2.0", "id": message_id, "error": error}
+                sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+                sys.stdout.flush()
+                break
             except Exception as e:
                 error = {"code": -32000, "message": str(e)}
                 response = {"jsonrpc": "2.0", "id": message_id, "error": error}
 
             if message_id is not None:
-                sys.stdout.write(json.dumps(response, ensure_ascii=False) + "\n")
+                # 使用 ensure_ascii=True 确保输出纯 ASCII 字符，避免 stdout 编码错误
+                sys.stdout.write(json.dumps(response, ensure_ascii=True) + "\n")
                 sys.stdout.flush()
         return
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jabanmcp"
-version = "0.1.2"
+version = "0.1.3"
 description = "MCP tool for automatic overtime application based on daily reports"
 readme = "readme.md"
 requires-python = ">=3.10"

@@ -5,6 +5,9 @@ import base64
 from datetime import datetime
 from config import MCPGlobalConfig
 
+class TokenExpiredError(Exception):
+    pass
+
 class OvertimeSubmitTask:
     """加班提报子任务（MCP 下属执行单元）"""
     def __init__(self):
@@ -39,6 +42,34 @@ class OvertimeSubmitTask:
         end_time = f"{overtime_date} {self.config.FIXED_OVERTIME_END}"
         return start_time, end_time
 
+    def _handle_response(self, response):
+        if getattr(response, "status_code", None) == 401:
+            raise TokenExpiredError("Token 已过期")
+        response.raise_for_status()
+
+    def health_check_token(self) -> bool:
+        body = {
+            "templateId": self.config.DAILY_TEMPLATE_ID,
+            "queryFilter": {
+                "pageBean": {"page": 1, "pageSize": 1},
+                "querys": [],
+                "sorter": [],
+            },
+        }
+        try:
+            response = requests.post(
+                url=self.daily_list_url,
+                json=body,
+                headers=self.headers,
+                timeout=self.config.REQUEST_TIMEOUT,
+            )
+            self._handle_response(response)
+            return True
+        except TokenExpiredError:
+            raise
+        except requests.exceptions.RequestException:
+            return False
+
     def _request_valid_exist(self, start_time: str, end_time: str):
         request_data = {
             "businessKey": "jbsqb",
@@ -54,7 +85,7 @@ class OvertimeSubmitTask:
             headers=self.headers,
             timeout=self.config.REQUEST_TIMEOUT,
         )
-        response.raise_for_status()
+        self._handle_response(response)
         return response.json()
 
     def _build_auto_overtime_from_daily(self, overtime_date: str):
@@ -76,8 +107,10 @@ class OvertimeSubmitTask:
                 headers=self.headers,
                 timeout=self.config.REQUEST_TIMEOUT,
             )
-            response.raise_for_status()
+            self._handle_response(response)
             data = response.json()
+        except TokenExpiredError:
+            raise
         except requests.exceptions.RequestException:
             return None
         rows = data.get("rows") or []
@@ -159,7 +192,7 @@ class OvertimeSubmitTask:
             headers=self.headers,
             timeout=self.config.REQUEST_TIMEOUT,
         )
-        response.raise_for_status()
+        self._handle_response(response)
         return response
 
     def execute(self, overtime_date: str, overtime_content: str = None) -> dict:
